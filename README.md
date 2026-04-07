@@ -1,6 +1,6 @@
 # 🚀 MongoDB VPS Deployment Guide (Production Ready)
 
-A complete step-by-step guide to deploy MongoDB on a VPS with authentication, replica set, and Prisma support.
+A complete production-ready guide to deploy MongoDB on a VPS with authentication, replica set, Prisma support, and security best practices.
 
 ---
 
@@ -10,11 +10,13 @@ A complete step-by-step guide to deploy MongoDB on a VPS with authentication, re
 * ✅ Secure Authentication
 * ✅ Remote Access Enabled
 * ✅ Replica Set (Prisma Ready)
-* ✅ Production Security Tips
+* ✅ KeyFile Security (Production)
+* ✅ Firewall & VPS Network Fix
+* ✅ Backup Guide
 
 ---
 
-## 🧱 1. VPS Login
+# 🧱 1. VPS Login
 
 ```bash
 ssh root@your_server_ip
@@ -22,7 +24,7 @@ ssh root@your_server_ip
 
 ---
 
-## 🔄 2. System Update
+# 🔄 2. System Update
 
 ```bash
 sudo apt update && sudo apt upgrade -y
@@ -30,12 +32,15 @@ sudo apt update && sudo apt upgrade -y
 
 ---
 
-## 📦 3. Install MongoDB
+# 📦 3. Install MongoDB (Updated Way)
 
 ```bash
-wget -qO - https://pgp.mongodb.com/server-7.0.asc | sudo apt-key add -
+curl -fsSL https://pgp.mongodb.com/server-7.0.asc | \
+sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
 
-echo "deb [ arch=amd64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+echo "deb [ arch=amd64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] \
+https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | \
+sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
 
 sudo apt update
 sudo apt install -y mongodb-org
@@ -43,14 +48,14 @@ sudo apt install -y mongodb-org
 
 ---
 
-## ▶️ 4. Start MongoDB
+# ▶️ 4. Start MongoDB
 
 ```bash
 sudo systemctl start mongod
 sudo systemctl enable mongod
 ```
 
-### Check Status
+Check:
 
 ```bash
 sudo systemctl status mongod
@@ -58,7 +63,7 @@ sudo systemctl status mongod
 
 ---
 
-## 🌐 5. Enable Remote Access
+# 🌐 5. Enable Remote Access
 
 ```bash
 sudo nano /etc/mongod.conf
@@ -70,26 +75,31 @@ net:
   bindIp: 0.0.0.0
 ```
 
----
-
-## 🔥 6. Firewall Setup
+Restart:
 
 ```bash
+sudo systemctl restart mongod
+```
+
+---
+
+# 🔥 6. Firewall Setup
+
+```bash
+# For testing
 sudo ufw allow 27017
+
+# Enable firewall
 sudo ufw enable
 ```
 
 ---
 
-## 🔐 7. Authentication Setup
-
-### Open Mongo Shell
+# 🔐 7. Create Admin User
 
 ```bash
 mongosh
 ```
-
-### Create Admin User
 
 ```js
 use admin
@@ -103,7 +113,7 @@ db.createUser({
 
 ---
 
-## 🔒 Enable Authentication
+# 🔒 8. Enable Authentication
 
 ```bash
 sudo nano /etc/mongod.conf
@@ -114,13 +124,15 @@ security:
   authorization: enabled
 ```
 
+Restart:
+
 ```bash
 sudo systemctl restart mongod
 ```
 
 ---
 
-## 🔑 Test Login
+# 🔑 9. Test Login
 
 ```bash
 mongosh -u admin -p --authenticationDatabase admin
@@ -128,9 +140,7 @@ mongosh -u admin -p --authenticationDatabase admin
 
 ---
 
-## 🔁 8. Replica Set Setup (For Prisma)
-
-### Update Config
+# 🔁 10. Replica Set Setup (Prisma Required)
 
 ```bash
 sudo nano /etc/mongod.conf
@@ -143,18 +153,14 @@ replication:
 
 ---
 
-### ⚠️ Important
-
-Temporarily disable auth before initializing replica set:
+## ⚠️ Disable auth temporarily
 
 ```yaml
 # security:
 #   authorization: enabled
 ```
 
----
-
-### Restart MongoDB
+Restart:
 
 ```bash
 sudo systemctl restart mongod
@@ -162,7 +168,7 @@ sudo systemctl restart mongod
 
 ---
 
-### Initialize Replica Set
+## Initialize
 
 ```bash
 mongosh
@@ -174,7 +180,7 @@ rs.initiate()
 
 ---
 
-### Fix Host
+## Fix Host (IMPORTANT)
 
 ```js
 rs.reconfig({
@@ -187,7 +193,7 @@ rs.reconfig({
 
 ---
 
-### Check Status
+## Check
 
 ```js
 rs.status()
@@ -201,7 +207,62 @@ stateStr: PRIMARY
 
 ---
 
-## 🔗 Connection String
+# 🔐 11. Enable KeyFile (Production Required)
+
+```bash
+openssl rand -base64 756 > /etc/mongo-keyfile
+sudo chmod 400 /etc/mongo-keyfile
+sudo chown mongodb:mongodb /etc/mongo-keyfile
+```
+
+---
+
+## Update config
+
+```yaml
+security:
+  authorization: enabled
+  keyFile: /etc/mongo-keyfile
+```
+
+Restart:
+
+```bash
+sudo systemctl restart mongod
+```
+
+---
+
+# 🔍 12. Verify MongoDB Running
+
+```bash
+ss -tulnp | grep 27017
+```
+
+Expected:
+
+```
+0.0.0.0:27017
+```
+
+---
+
+# 🌐 13. VPS Firewall (VERY IMPORTANT)
+
+👉 If connection fails:
+
+* Open VPS provider panel
+* Allow:
+
+```
+Port: 27017
+Protocol: TCP
+Source: 0.0.0.0/0 (testing)
+```
+
+---
+
+# 🔗 14. Connection String
 
 ```bash
 mongodb://admin:Admin12345@YOUR_SERVER_IP:27017/mydb?authSource=admin&replicaSet=rs0
@@ -209,15 +270,17 @@ mongodb://admin:Admin12345@YOUR_SERVER_IP:27017/mydb?authSource=admin&replicaSet
 
 ---
 
-## ⚙️ Prisma Setup
+# ⚙️ 15. Prisma Setup
 
-### .env
+### `.env`
 
 ```env
 DATABASE_URL="mongodb://admin:Admin12345@YOUR_SERVER_IP:27017/mydb?authSource=admin&replicaSet=rs0"
 ```
 
-### Run Commands
+---
+
+### Run
 
 ```bash
 npx prisma generate
@@ -227,55 +290,87 @@ npm run dev
 
 ---
 
-## 🔐 Production Security
-
-### Basic
+# 🧪 16. Test Connection
 
 ```bash
+mongosh "mongodb://admin:Admin12345@YOUR_SERVER_IP:27017/?authSource=admin&replicaSet=rs0"
+```
+
+---
+
+# ❌ Common Errors & Fix
+
+---
+
+### 🔴 Error: `ENOTFOUND`
+
+👉 Fix:
+
+```js
+rs.reconfig({
+  host: "IP:27017"
+})
+```
+
+---
+
+### 🔴 Error: `ETIMEDOUT`
+
+👉 Fix:
+
+* Check firewall
+* Check VPS provider firewall
+
+---
+
+### 🔴 Error: `mongod failed`
+
+👉 Fix:
+
+* Check config indentation
+* Check keyFile permission
+
+---
+
+# 🔐 Security Best Practices
+
+```bash
+# Restrict access
 sudo ufw allow from YOUR_IP to any port 27017
 ```
 
 ---
 
-### Advanced (Recommended)
+# 💾 Backup (IMPORTANT)
 
 ```bash
-openssl rand -base64 756 > /etc/mongo-keyfile
-sudo chmod 400 /etc/mongo-keyfile
-sudo chown mongodb:mongodb /etc/mongo-keyfile
+mongodump --uri="mongodb://admin:password@IP:27017"
 ```
 
-```yaml
-security:
-  authorization: enabled
-  keyFile: /etc/mongo-keyfile
+Restore:
+
+```bash
+mongorestore --uri="mongodb://admin:password@IP:27017"
 ```
 
 ---
 
-## ✅ Final Checklist
+# 🎯 Final Checklist
 
 * [x] MongoDB Installed
 * [x] Running
 * [x] Remote Access Enabled
 * [x] Authentication Enabled
 * [x] Replica Set Ready
+* [x] KeyFile Enabled
 * [x] Prisma Connected
 
 ---
 
-## 💡 Tips
+# 🎉 Done
 
-* Small/Medium Project → VPS MongoDB ✅
-* Large Scale → MongoDB Atlas 🚀
-* Always keep backups ⚠️
+Your MongoDB is now:
 
----
-
-## 🎉 Done
-
-Now your MongoDB is:
-
-* Production Ready 🚀
-* Secure 🔐
-* Prisma Compatible ⚡
+* 🚀 Production Ready
+* 🔐 Secure
+* ⚡ Prisma Compatible
